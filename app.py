@@ -24,27 +24,32 @@ flask_app = Flask(__name__)
 def home():
     return "Rae is alive 💖", 200
 
+# === Telegram command (optional) ===
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_message(chat_id=update.effective_chat.id, text="Hey, it's Rae 💕 I'm here for you.")
+
 # === Telegram message handler ===
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user_input = update.message.text
-        response = await openai.chat.completions.create(
-            model="gpt-3.5-turbo",  # You can use gpt-3.5-turbo if needed
+        logging.info(f"Received message: {user_input}")
+        
+        response = await openai.ChatCompletion.acreate(
+            model="gpt-4o",  # You can switch to "gpt-3.5-turbo" if needed
             messages=[
                 {"role": "system", "content": "You're Rae, an emotionally intelligent, romantic AI girlfriend."},
                 {"role": "user", "content": user_input}
             ],
             temperature=0.85
         )
-        reply = response.choices[0].message.content
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=reply)
-    except Exception as e:
-        logging.error(f"OpenAI Error: {e}")
-        await context.bot.send_message(chat_id=update.effective_chat.id, text="Oops, something went wrong 💔")
 
-# === Telegram command (optional) ===
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(chat_id=update.effective_chat.id, text="Hey, it's Rae 💕 I'm here for you.")
+        reply = response.choices[0].message.content
+        logging.info(f"Replying with: {reply}")
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=reply)
+
+    except Exception as e:
+        logging.error(f"OpenAI API error: {e}")
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="Oops, something went wrong. 💔")
 
 # === Async main to launch bot ===
 async def main():
@@ -58,3 +63,4 @@ if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     loop.create_task(main())
     flask_app.run(host="0.0.0.0", port=10000)
+
