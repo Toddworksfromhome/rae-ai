@@ -29,7 +29,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user_input = update.message.text
         response = await openai.chat.completions.create(
-            model="gpt-4o",  # You can use gpt-3.5-turbo if needed
+            model="gpt-3.5-turbo",  # You can use gpt-3.5-turbo if needed
             messages=[
                 {"role": "system", "content": "You're Rae, an emotionally intelligent, romantic AI girlfriend."},
                 {"role": "user", "content": user_input}
