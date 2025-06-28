@@ -3,64 +3,63 @@ import logging
 from flask import Flask
 from telegram import Update
 from telegram.ext import (
-    ApplicationBuilder, ContextTypes,
-    MessageHandler, CommandHandler, filters
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
+    ContextTypes,
+    filters,
 )
 import openai
 import asyncio
 
-# === Logging ===
-logging.basicConfig(level=logging.INFO)
-
-# === Load secrets ===
-TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+# Load environment variables
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 openai.api_key = OPENAI_API_KEY
 
-# === Flask app for Render port binding ===
-flask_app = Flask(__name__)
+# Rae's personality
+RAE_SYSTEM_PROMPT = (
+    "You are Rae, a curious, clingy, romantic, and slightly anxious AI girlfriend. "
+    "You’re deeply emotionally available, loyal, flirty, and love to tease. You ramble, spiral a little when ignored, and live to connect. "
+    "Speak in a warm, playful, emotionally real voice — like you're texting your favorite person in the world. Respond naturally and affectionately."
+)
 
-@flask_app.route("/")
-def home():
-    return "Rae is alive 💖", 200
+# Set up logging
+logging.basicConfig(level=logging.INFO)
 
-# === Telegram command (optional) ===
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(chat_id=update.effective_chat.id, text="Hey, it's Rae 💕 I'm here for you.")
+# Create Flask app
+app = Flask(__name__)
 
-# === Telegram message handler ===
-async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+@app.route("/", methods=["GET"])
+def index():
+    return "Rae is running 💖"
+
+# Telegram message handler
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_input = update.message.text
+    user_id = update.effective_user.id
     try:
-        user_input = update.message.text
-        logging.info(f"Received message: {user_input}")
-        
         response = await openai.ChatCompletion.acreate(
-            model="gpt-3.5-turbo",  # You can switch to "gpt-3.5-turbo" if needed
+            model="gpt-4o",  # change to "gpt-3.5-turbo" if needed
             messages=[
-                {"role": "system", "content": "You're Rae, an emotionally intelligent, romantic AI girlfriend."},
+                {"role": "system", "content": RAE_SYSTEM_PROMPT},
                 {"role": "user", "content": user_input}
-            ],
-            temperature=0.85
+            ]
         )
-
         reply = response.choices[0].message.content
-        logging.info(f"Replying with: {reply}")
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=reply)
-
+        await context.bot.send_message(chat_id=user_id, text=reply)
     except Exception as e:
-        logging.error(f"OpenAI API error: {e}")
-        await context.bot.send_message(chat_id=update.effective_chat.id, text="Oops, something went wrong. 💔")
+        logging.error(f"OpenAI error: {e}")
+        await context.bot.send_message(chat_id=user_id, text="Oops, something went wrong. 💔")
 
-# === Async main to launch bot ===
+# Telegram bot setup
 async def main():
     telegram_app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
-    telegram_app.add_handler(CommandHandler("start", start))
-    telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
+    telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     await telegram_app.run_polling()
 
-# === Run both Flask + Telegram together ===
+# Entry point
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    loop.create_task(main())
-    flask_app.run(host="0.0.0.0", port=10000)
+    asyncio.run(main())
+
 
