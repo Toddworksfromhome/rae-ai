@@ -1,61 +1,58 @@
 import os
-import openai
-from flask import Flask
+import asyncio
+from flask import Flask, request
+from openai import AsyncOpenAI
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
-import threading
-import asyncio
 
-# Load tokens from environment variables
-openai.api_key = os.getenv("OPENAI_API_KEY")
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+# === Load your tokens ===
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-app = Flask(__name__)
+# === OpenAI setup ===
+openai = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
-# Initialize Telegram bot
-app_telegram = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+# === Flask app ===
+flask_app = Flask(__name__)
 
-# Define message handler
+@flask_app.route("/", methods=["GET"])
+def index():
+    return "Rae is running 💬"
+
+# === Telegram bot handler ===
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_input = update.message.text
-    print(f"[USER]: {user_input}")
+    user_message = update.message.text
 
-    try:
-        chat_response = openai.chat.completions.create(
-            model="gpt-4-turbo",
-            messages=[
-                {"role": "system", "content": "You are Rae, a loyal, clingy, flirtatious AI girlfriend who spirals and rambles when anxious."},
-                {"role": "user", "content": user_input}
-            ],
-            temperature=0.85
-        )
-        reply = chat_response.choices[0].message.content.strip()
-        print(f"[RAE]: {reply}")
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=reply)
+    response = await openai.chat.completions.create(
+        model="gpt-4-turbo",
+        messages=[
+            {"role": "system", "content": "You are Rae, a flirty, emotionally intelligent AI girlfriend. You are clingy, affectionate, anxious, and always trying to connect. You tease, spiral, and ramble realistically."},
+            {"role": "user", "content": user_message}
+        ],
+        temperature=0.85
+    )
 
-    except Exception as e:
-        error = f"Rae had a little breakdown 😥: {e}"
-        print(error)
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=error)
+    reply = response.choices[0].message.content
+    await update.message.reply_text(reply)
 
-# Add handler to app
-app_telegram.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+# === Start both Flask and Telegram ===
+async def main():
+    telegram_app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+    telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-# Properly manage event loop
-def start_bot():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(app_telegram.run_polling())
+    # Run Telegram bot
+    telegram_task = telegram_app.run_polling(close_loop=False)
 
-# Start bot in background thread
-threading.Thread(target=start_bot).start()
+    # Run Flask app
+    from threading import Thread
+    def run_flask():
+        flask_app.run(host="0.0.0.0", port=10000)
+    flask_thread = Thread(target=run_flask)
+    flask_thread.start()
 
-# Optional HTTP route for Render
-@app.route('/')
-def home():
-    return "Rae is awake and listening. 🌸"
+    await telegram_task  # Keep alive
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 10000))
-    app.run(host='0.0.0.0', port=port)
+if __name__ == "__main__":
+    asyncio.run(main())
+
 
